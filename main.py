@@ -2,7 +2,7 @@
 RAG API application entrypoint.
 
 Creates the FastAPI app, wires middleware, exception handlers, lifespan
-(DB init/dispose), and mounts the v1 API router.
+(DB init/dispose + embedding model load), and mounts the v1 API router.
 """
 
 from __future__ import annotations
@@ -19,20 +19,33 @@ from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestContextMiddleware
 from app.db.session import dispose_db, init_db
+from app.rag.embedding import LocalBGEEmbeddingProvider
 
 logger = get_logger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Initialize and tear down infrastructure resources."""
     settings = get_settings()
     configure_logging(settings)
     init_db(settings)
+
+    embedding_provider = LocalBGEEmbeddingProvider.get_instance(
+        model_name=settings.embedding_model_name,
+        dimension=settings.embedding_dimension,
+        batch_size=settings.embedding_batch_size,
+    )
+    app.state.embedding_provider = embedding_provider
+    if settings.load_embedding_model_on_startup:
+        embedding_provider.load()
+
     logger.info(
         "application_startup",
         environment=settings.environment,
         version=settings.app_version,
+        embedding_model=settings.embedding_model_name,
+        embedding_ready=embedding_provider.is_ready(),
     )
     try:
         yield
@@ -48,9 +61,13 @@ def create_app() -> FastAPI:
     application = FastAPI(
         title="RAG API",
         description=(
-            "Production-ready Retrieval-Augmented Generation API. "
-            "This phase exposes infrastructure health checks only; "
-            "upload, extraction, embedding, and retrieval arrive later."
+            "Production-ready Retrieval-Augmented Generation API.\n\n"
+            "## Document upload\n"
+            "Use `POST /api/v1/upload` with `multipart/form-data` to ingest "
+            "PDF, DOCX, Markdown, or TXT files. Text is extracted, chunked "
+            "(500 tokens / 100 overlap), embedded with a local BGE model, and "
+            "stored in PostgreSQL via pgvector.\n\n"
+            f"Default max upload size: **{settings.max_upload_size_bytes}** bytes."
         ),
         version=settings.app_version,
         lifespan=lifespan,

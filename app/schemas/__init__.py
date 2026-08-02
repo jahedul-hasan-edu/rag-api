@@ -1,5 +1,5 @@
-"""Pydantic request/response schemas."""
+"""Pydantic schemas package."""
 
-from app.schemas.common import ErrorResponse, HealthResponse
+from app.schemas.common import ErrorResponse, HealthResponse, UploadResponse
 
-__all__ = ["ErrorResponse", "HealthResponse"]
+__all__ = ["ErrorResponse", "HealthResponse", "UploadResponse"]

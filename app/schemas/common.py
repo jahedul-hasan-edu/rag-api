@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -34,4 +35,27 @@ class HealthResponse(BaseModel):
     database: Literal["connected", "disconnected"] = Field(
         ...,
         description="Database connectivity status.",
+    )
+
+
+class UploadResponse(BaseModel):
+    """Successful document upload / ingestion response."""
+
+    model_config = ConfigDict(strict=True)
+
+    document_id: UUID = Field(..., description="Persisted document identifier.")
+    filename: str = Field(..., description="Original uploaded filename.")
+    total_pages: int = Field(..., description="Logical page count after extraction.")
+    total_chunks: int = Field(..., description="Number of chunks stored.")
+    embedding_model: str = Field(..., description="Embedding model used for vectors.")
+    processing_time: float = Field(
+        ...,
+        description="End-to-end processing time in seconds.",
+    )
+    status: Literal["completed", "duplicate"] = Field(
+        ...,
+        description=(
+            "`completed` for newly ingested documents; "
+            "`duplicate` when an identical SHA-256 already exists."
+        ),
     )

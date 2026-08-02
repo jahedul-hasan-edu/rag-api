@@ -45,6 +45,15 @@ class SqlAlchemyDocumentChunkRepository(DocumentChunkRepository):
         await self._session.refresh(chunk)
         return chunk
 
+    async def add_many(self, chunks: Sequence[DocumentChunk]) -> Sequence[DocumentChunk]:
+        if not chunks:
+            return []
+        self._session.add_all(list(chunks))
+        await self._session.flush()
+        for chunk in chunks:
+            await self._session.refresh(chunk)
+        return chunks
+
     async def delete_by_document_id(self, document_id: uuid.UUID) -> int:
         result = await self._session.execute(
             delete(DocumentChunk).where(DocumentChunk.document_id == document_id)

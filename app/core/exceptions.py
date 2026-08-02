@@ -37,6 +37,77 @@ class AppError(Exception):
         self.details = details
 
 
+class UnsupportedFileError(AppError):
+    """Raised when the uploaded file type is not supported."""
+
+    def __init__(self, message: str, *, details: dict[str, Any] | None = None) -> None:
+        super().__init__(
+            message,
+            code="unsupported_file",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            details=details,
+        )
+
+
+class FileTooLargeError(AppError):
+    """Raised when the uploaded file exceeds the configured size limit."""
+
+    def __init__(self, message: str, *, details: dict[str, Any] | None = None) -> None:
+        super().__init__(
+            message,
+            code="file_too_large",
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            details=details,
+        )
+
+
+class EmptyFileError(AppError):
+    """Raised when the uploaded file is empty."""
+
+    def __init__(self, message: str = "Uploaded file is empty.") -> None:
+        super().__init__(
+            message,
+            code="empty_file",
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        )
+
+
+class CorruptedFileError(AppError):
+    """Raised when the uploaded file cannot be parsed."""
+
+    def __init__(self, message: str, *, details: dict[str, Any] | None = None) -> None:
+        super().__init__(
+            message,
+            code="corrupted_file",
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            details=details,
+        )
+
+
+class ExtractionError(AppError):
+    """Raised when text extraction fails unexpectedly."""
+
+    def __init__(self, message: str, *, details: dict[str, Any] | None = None) -> None:
+        super().__init__(
+            message,
+            code="extraction_error",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            details=details,
+        )
+
+
+class ProcessingError(AppError):
+    """Raised when ingestion processing fails unexpectedly."""
+
+    def __init__(self, message: str, *, details: dict[str, Any] | None = None) -> None:
+        super().__init__(
+            message,
+            code="processing_error",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            details=details,
+        )
+
+
 def _error_body(
     *,
     error: str,
@@ -91,7 +162,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         exc: RequestValidationError,
     ) -> JSONResponse:
         return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             content=_error_body(
                 error="validation_error",
                 message="Request validation failed.",
