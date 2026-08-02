@@ -36,7 +36,6 @@ rag-api/
 ├── alembic.ini
 ├── pyproject.toml
 ├── poetry.lock
-├── requirements.txt   # pip mirror of pyproject deps
 └── .env.example
 ```
 

@@ -24,6 +24,8 @@ The application must be maintainable, testable, and scalable.
 
 Python 3.13
 
+Poetry (dependency management — do NOT use requirements.txt)
+
 FastAPI
 
 SQLAlchemy 2.0 Async
@@ -51,6 +53,19 @@ PyMuPDF
 python-docx
 
 tiktoken
+
+---
+
+# Dependency Management
+
+Use Poetry exclusively.
+
+- Declare runtime and dev dependencies in `pyproject.toml`
+- Lock versions with `poetry.lock`
+- Install with `poetry install`
+- Run commands with `poetry run ...`
+
+Do NOT create or maintain `requirements.txt`.
 
 ---
 
@@ -95,7 +110,9 @@ tests/
 
 main.py
 
-requirements.txt
+pyproject.toml
+
+poetry.lock
 
 .env.example
 

@@ -14,6 +14,15 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+
+def _normalize_database_url(database_url: str) -> str:
+    """Normalize the configured database URL for the async SQLAlchemy engine."""
+    if database_url.startswith("postgresql://"):
+        return database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    if database_url.startswith("postgresql+psycopg2://"):
+        return database_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
+    return database_url
+
 from app.core.config import Settings
 
 _engine: AsyncEngine | None = None
@@ -22,8 +31,9 @@ _session_factory: async_sessionmaker[AsyncSession] | None = None
 
 def create_engine(settings: Settings) -> AsyncEngine:
     """Create the async SQLAlchemy engine from settings."""
+    normalized_url = _normalize_database_url(settings.database_url.get_secret_value())
     return create_async_engine(
-        settings.database_url.get_secret_value(),
+        normalized_url,
         echo=not settings.is_production,
         pool_pre_ping=True,
         pool_size=5,
