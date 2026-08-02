@@ -2,7 +2,7 @@
 
 Production-oriented FastAPI service for Retrieval-Augmented Generation.
 
-**Phase 2** ships the complete **document ingestion pipeline**: upload validation, text extraction, chunking, local BGE embeddings, and pgvector persistence. Search / LLM answering arrive in a later phase.
+**Phase 3** adds the **retrieval + grounded answering pipeline**: pgvector semantic search, PromptBuilder, OpenAI streaming answers with citations, SSE, and conversation history.
 
 ## Stack
 
@@ -10,12 +10,13 @@ Production-oriented FastAPI service for Retrieval-Augmented Generation.
 | --- | --- |
 | Runtime | Python 3.13 (compatible with 3.10+) |
 | Package manager | Poetry |
-| API | FastAPI + uvicorn |
+| API | FastAPI + uvicorn (SSE streaming) |
 | Config | Pydantic Settings v2 + python-dotenv |
 | DB | SQLAlchemy 2.0 async + asyncpg |
 | Migrations | Alembic |
-| Vectors | pgvector (Supabase PostgreSQL), 384-d |
+| Vectors | pgvector cosine similarity (Top-K=5) |
 | Embeddings | `sentence-transformers` (`BAAI/bge-small-en-v1.5`) |
+| LLM | OpenAI Chat Completions (stream) |
 | Extraction | PyMuPDF, python-docx |
 | Chunking | tiktoken (500 tokens / 100 overlap) |
 | Logging | structlog |
@@ -26,25 +27,23 @@ Production-oriented FastAPI service for Retrieval-Augmented Generation.
 ```
 rag-api/
 ├── app/
-│   ├── api/v1/          # health + upload (+ search stub)
+│   ├── api/v1/          # upload, search (SSE), chat
 │   ├── core/            # config, logging, DI, middleware, errors
 │   ├── db/              # engine, models, Alembic migrations
 │   ├── rag/
-│   │   ├── extraction/  # PDF / DOCX / MD / TXT extractors
-│   │   ├── chunking/    # token-aware ChunkingService
-│   │   ├── embedding/   # EmbeddingProvider + local BGE
-│   │   ├── retrieval/   # later
-│   │   └── prompts/     # later
-│   ├── repositories/    # Document + DocumentChunk ports/adapters
-│   ├── schemas/         # Pydantic v2 response models
-│   ├── services/        # UploadService orchestration
+│   │   ├── extraction/
+│   │   ├── chunking/
+│   │   ├── embedding/
+│   │   ├── retrieval/   # Retriever port + PgVectorRetriever
+│   │   ├── prompts/     # PromptBuilder
+│   │   └── llm/         # LLMProvider + OpenAI
+│   ├── repositories/
+│   ├── schemas/
+│   ├── services/        # Upload / Search / Chat
 │   └── utils/
 ├── tests/
 ├── main.py
-├── alembic.ini
-├── pyproject.toml
-├── poetry.lock
-└── .env.example
+└── pyproject.toml
 ```
 
 ## Prerequisites
@@ -52,11 +51,8 @@ rag-api/
 - Python 3.10+ (3.13 recommended)
 - [Poetry](https://python-poetry.org/docs/#installation) 2.x
 - PostgreSQL with the `vector` extension (e.g. Supabase)
-- **Windows:** [Microsoft Visual C++ 2015–2022 Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe) — required by PyMuPDF (`MSVCP140.dll`)
-
-```bash
-poetry --version
-```
+- OpenAI API key
+- **Windows:** [Microsoft Visual C++ 2015–2022 Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe) — required by PyMuPDF
 
 ## Setup
 
@@ -64,22 +60,9 @@ poetry --version
 cd rag-api
 poetry install
 cp .env.example .env
-# Set DATABASE_URL and OPENAI_API_KEY in .env
-```
-
-First startup downloads `BAAI/bge-small-en-v1.5` (cached by Hugging Face). For tests / CI that mock embeddings, set:
-
-```env
-LOAD_EMBEDDING_MODEL_ON_STARTUP=false
-```
-
-### Migrations
-
-```bash
+# Set DATABASE_URL and OPENAI_API_KEY
 poetry run alembic upgrade head
 ```
-
-Creates `documents`, reshapes `document_chunks` (FK + `token_count` + 384-d vectors), and adds a cosine HNSW index.
 
 ## Run
 
@@ -87,43 +70,47 @@ Creates `documents`, reshapes `document_chunks` (FK + `token_count` + 384-d vect
 poetry run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-- Swagger UI: http://localhost:8000/docs
-- Health: http://localhost:8000/health
+- Docs: http://localhost:8000/docs
+- Health: `GET /health`
 - Upload: `POST /api/v1/upload`
+- Search (SSE): `POST /api/v1/search`
+- Chat (SSE): `POST /api/v1/chat`
+- History: `GET /api/v1/chat/{conversation_id}`
 
-### Upload example
+### Search example (SSE)
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/upload \
-  -F "file=@./handbook.pdf"
+curl -N -X POST http://localhost:8000/api/v1/search \
+  -H "Content-Type: application/json" \
+  -d '{"question":"What is the refund policy?","document_id":null}'
 ```
 
-Response:
+SSE events:
 
-```json
-{
-  "document_id": "550e8400-e29b-41d4-a716-446655440000",
-  "filename": "handbook.pdf",
-  "total_pages": 12,
-  "total_chunks": 48,
-  "embedding_model": "BAAI/bge-small-en-v1.5",
-  "processing_time": 1.8421,
-  "status": "completed"
-}
-```
-
-Identical content (SHA-256 match) returns the existing document with `"status": "duplicate"`.
-
-### Supported types
-
-| Extension | MIME |
+| Event | Purpose |
 | --- | --- |
-| `.pdf` | `application/pdf` |
-| `.docx` | Word OpenXML |
-| `.md` | `text/markdown` |
-| `.txt` | `text/plain` |
+| `citation` | filename, page_number, chunk_index, similarity_score, ids |
+| `token` | streamed answer fragment |
+| `done` | full answer + citations + timings |
+| `error` | failure payload |
 
-Default max size: **10 MiB** (`MAX_UPLOAD_SIZE_BYTES`).
+### Chat example
+
+```bash
+# Start a conversation
+curl -N -X POST http://localhost:8000/api/v1/chat \
+  -H "Content-Type: application/json" \
+  -d '{"question":"Summarize the handbook introduction."}'
+
+# Continue (include conversation_id from the `conversation` / `done` event)
+curl -N -X POST http://localhost:8000/api/v1/chat \
+  -H "Content-Type: application/json" \
+  -d '{"question":"What about chapter 2?","conversation_id":"<uuid>"}'
+
+curl http://localhost:8000/api/v1/chat/<uuid>
+```
+
+Optional filters on search/chat: `document_id`, `filename` (ILIKE), `tags`, `page_number`.
 
 ## Tests
 
@@ -131,19 +118,22 @@ Default max size: **10 MiB** (`MAX_UPLOAD_SIZE_BYTES`).
 poetry run pytest
 ```
 
-Embedding tests mock `sentence-transformers`; upload HTTP tests mock `UploadService`.
+LLM / retrieval HTTP tests mock services; PromptBuilder and pipeline tests are pure unit tests.
 
 ## Architecture notes
 
-- **Clean architecture**: routers → `UploadService` → repository interfaces → SQLAlchemy adapters.
-- **Provider-independent embeddings**: services depend on `EmbeddingProvider`; swap local BGE for OpenAI/Gemini later without changing business logic.
-- **Background-ready orchestration**: all pipeline steps live in `UploadService.process()` (no FastAPI imports), so Celery/RQ/Dramatiq can call the same method later.
-- **Transactions**: request-scoped `AsyncSession` commits on success and rolls back on any failure — no partial documents/chunks.
-- **Structured logging**: upload started → validation → duplicate detection → extraction → chunking → embedding → DB insert → processing time.
+- **Retriever port**: `PgVectorRetriever` today; hybrid search / reranking can plug in without changing Search/Chat services.
+- **LLM port**: `OpenAILLMProvider` behind `LLMProvider` for Azure/local swaps later.
+- **Grounding**: PromptBuilder forces context-only answers; empty retrieval returns the exact not-found sentence without calling the LLM.
+- **Citations**: emitted as SSE `citation` events (and again on `done`) for clickable UI rendering.
+- **History**: recent messages (configurable `CONVERSATION_HISTORY_LIMIT`) are injected into chat prompts.
+- **Disconnect**: SSE generators stop when `request.is_disconnected()` is true.
 
-## Next phases (not in this PR)
+## Config knobs
 
-1. Vector similarity search
-2. Prompt construction + LLM answers
-3. Streaming + citations
-4. Conversation history
+| Env | Default | Meaning |
+| --- | --- | --- |
+| `RETRIEVAL_TOP_K` | 5 | Chunks retrieved per query |
+| `OPENAI_MODEL` | `gpt-4o-mini` | Chat model |
+| `LLM_TEMPERATURE` | 0 | Prefer deterministic grounded answers |
+| `CONVERSATION_HISTORY_LIMIT` | 10 | Recent messages kept in prompts |

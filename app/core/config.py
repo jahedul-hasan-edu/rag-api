@@ -90,6 +90,36 @@ class Settings(BaseSettings):
         description="Load the local embedding model during app lifespan startup.",
     )
 
+    # --- Retrieval / LLM (Phase 3) ---
+    retrieval_top_k: int = Field(
+        default=5,
+        alias="RETRIEVAL_TOP_K",
+        description="Number of nearest chunks to retrieve for each query.",
+        gt=0,
+    )
+    openai_model: str = Field(
+        default="gpt-4o-mini",
+        alias="OPENAI_MODEL",
+        description="OpenAI chat model used for grounded answers.",
+    )
+    openai_base_url: str | None = Field(
+        default=None,
+        alias="OPENAI_BASE_URL",
+        description="Optional OpenAI-compatible API base URL.",
+    )
+    conversation_history_limit: int = Field(
+        default=10,
+        alias="CONVERSATION_HISTORY_LIMIT",
+        description="Max recent messages (user+assistant) included in chat prompts.",
+        gt=0,
+    )
+    llm_temperature: float = Field(
+        default=0.0,
+        alias="LLM_TEMPERATURE",
+        description="Sampling temperature for grounded answers (prefer 0).",
+        ge=0.0,
+    )
+
     @property
     def is_production(self) -> bool:
         """Return True when running in production."""

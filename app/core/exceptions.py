@@ -108,6 +108,18 @@ class ProcessingError(AppError):
         )
 
 
+class ConversationNotFoundError(AppError):
+    """Raised when a conversation id does not exist."""
+
+    def __init__(self, conversation_id: Any) -> None:
+        super().__init__(
+            f"Conversation '{conversation_id}' was not found.",
+            code="conversation_not_found",
+            status_code=status.HTTP_404_NOT_FOUND,
+            details={"conversation_id": str(conversation_id)},
+        )
+
+
 def _error_body(
     *,
     error: str,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
@@ -59,3 +60,82 @@ class UploadResponse(BaseModel):
             "`duplicate` when an identical SHA-256 already exists."
         ),
     )
+
+
+class SearchRequest(BaseModel):
+    """Semantic search / grounded Q&A request."""
+
+    model_config = ConfigDict(strict=True)
+
+    question: str = Field(..., min_length=1, description="User question.")
+    document_id: UUID | None = Field(
+        default=None,
+        description="Optional document scope filter.",
+    )
+    filename: str | None = Field(
+        default=None,
+        description="Optional filename filter (SQL ILIKE pattern, e.g. %.pdf).",
+    )
+    tags: list[str] = Field(
+        default_factory=list,
+        description="Optional document metadata tags that must all match.",
+    )
+    page_number: int | None = Field(
+        default=None,
+        ge=1,
+        description="Optional page-number filter.",
+    )
+
+
+class CitationSchema(BaseModel):
+    """Citation attached to a grounded answer."""
+
+    model_config = ConfigDict(strict=True)
+
+    chunk_id: UUID
+    document_id: UUID
+    filename: str
+    page_number: int | None = None
+    chunk_index: int
+    similarity_score: float
+
+
+class ChatRequest(BaseModel):
+    """Multi-turn chat request."""
+
+    model_config = ConfigDict(strict=True)
+
+    question: str = Field(..., min_length=1, description="User question.")
+    conversation_id: UUID | None = Field(
+        default=None,
+        description="Existing conversation id; omit to start a new chat.",
+    )
+    document_id: UUID | None = None
+    filename: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    page_number: int | None = Field(default=None, ge=1)
+
+
+class MessageSchema(BaseModel):
+    """Persisted chat message."""
+
+    model_config = ConfigDict(strict=True)
+
+    id: UUID
+    role: str
+    content: str
+    retrieved_chunk_ids: list[str] = Field(default_factory=list)
+    citations: list[dict[str, Any]] = Field(default_factory=list)
+    created_at: datetime
+
+
+class ConversationResponse(BaseModel):
+    """Conversation with ordered messages."""
+
+    model_config = ConfigDict(strict=True)
+
+    id: UUID
+    title: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    messages: list[MessageSchema] = Field(default_factory=list)

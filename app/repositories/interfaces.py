@@ -11,7 +11,7 @@ import uuid
 from abc import ABC, abstractmethod
 from typing import Sequence
 
-from app.db.models import Document, DocumentChunk
+from app.db.models import Conversation, Document, DocumentChunk, Message
 
 
 class DocumentRepository(ABC):
@@ -55,3 +55,40 @@ class DocumentChunkRepository(ABC):
     @abstractmethod
     async def delete_by_document_id(self, document_id: uuid.UUID) -> int:
         """Delete all chunks for a document; return rows deleted."""
+
+
+class ConversationRepository(ABC):
+    """Persistence port for Conversation aggregates."""
+
+    @abstractmethod
+    async def get_by_id(self, conversation_id: uuid.UUID) -> Conversation | None:
+        """Return a conversation by id, or None."""
+
+    @abstractmethod
+    async def add(self, conversation: Conversation) -> Conversation:
+        """Persist a new conversation."""
+
+    @abstractmethod
+    async def touch(self, conversation: Conversation) -> Conversation:
+        """Bump updated_at and flush."""
+
+
+class MessageRepository(ABC):
+    """Persistence port for Message aggregates."""
+
+    @abstractmethod
+    async def list_by_conversation_id(
+        self,
+        conversation_id: uuid.UUID,
+        *,
+        limit: int | None = None,
+    ) -> Sequence[Message]:
+        """Return messages ordered by created_at ascending (optionally last *limit*)."""
+
+    @abstractmethod
+    async def add(self, message: Message) -> Message:
+        """Persist a new message."""
+
+    @abstractmethod
+    async def add_many(self, messages: Sequence[Message]) -> Sequence[Message]:
+        """Persist many messages."""

@@ -46,6 +46,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         version=settings.app_version,
         embedding_model=settings.embedding_model_name,
         embedding_ready=embedding_provider.is_ready(),
+        openai_model=settings.openai_model,
     )
     try:
         yield
@@ -64,10 +65,15 @@ def create_app() -> FastAPI:
             "Production-ready Retrieval-Augmented Generation API.\n\n"
             "## Document upload\n"
             "Use `POST /api/v1/upload` with `multipart/form-data` to ingest "
-            "PDF, DOCX, Markdown, or TXT files. Text is extracted, chunked "
-            "(500 tokens / 100 overlap), embedded with a local BGE model, and "
-            "stored in PostgreSQL via pgvector.\n\n"
-            f"Default max upload size: **{settings.max_upload_size_bytes}** bytes."
+            "PDF, DOCX, Markdown, or TXT files.\n\n"
+            "## Search (SSE)\n"
+            "Use `POST /api/v1/search` to ask questions; the response is a "
+            "Server-Sent Events stream of `citation`, `token`, and `done` events.\n\n"
+            "## Chat\n"
+            "`POST /api/v1/chat` streams answers and persists conversation history. "
+            "`GET /api/v1/chat/{conversation_id}` returns prior turns.\n\n"
+            f"Default max upload size: **{settings.max_upload_size_bytes}** bytes. "
+            f"Retrieval top-k: **{settings.retrieval_top_k}**."
         ),
         version=settings.app_version,
         lifespan=lifespan,
