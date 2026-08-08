@@ -108,6 +108,18 @@ class ProcessingError(AppError):
         )
 
 
+class DatabaseUnavailableError(AppError):
+    """Raised when the database cannot be reached (DNS, network, auth, etc.)."""
+
+    def __init__(self, message: str, *, details: dict[str, Any] | None = None) -> None:
+        super().__init__(
+            message,
+            code="database_unavailable",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            details=details,
+        )
+
+
 class ConversationNotFoundError(AppError):
     """Raised when a conversation id does not exist."""
 

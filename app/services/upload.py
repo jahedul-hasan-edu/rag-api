@@ -17,6 +17,8 @@ from typing import Literal
 
 from app.core.config import Settings
 from app.core.exceptions import (
+    AppError,
+    DatabaseUnavailableError,
     EmptyFileError,
     FileTooLargeError,
     ProcessingError,
@@ -32,6 +34,31 @@ from app.repositories.interfaces import DocumentChunkRepository, DocumentReposit
 logger = get_logger(__name__)
 
 UploadStatus = Literal["completed", "duplicate"]
+
+_DB_CONNECTION_MARKERS = (
+    "getaddrinfo failed",
+    "gaierror",
+    "could not translate host name",
+    "connection refused",
+    "timeout expired",
+    "connection reset",
+    "server closed the connection",
+    "password authentication failed",
+    "could not connect to server",
+    "name or service not known",
+    "nodename nor servname provided",
+)
+
+
+def _is_database_connectivity_error(exc: BaseException) -> bool:
+    """Return True for typical DNS / network / auth failures talking to Postgres."""
+    text = str(exc).lower()
+    if any(marker in text for marker in _DB_CONNECTION_MARKERS):
+        return True
+    cause = getattr(exc, "__cause__", None) or getattr(exc, "orig", None)
+    if cause is not None and cause is not exc:
+        return _is_database_connectivity_error(cause)
+    return False
 
 
 @dataclass(frozen=True, slots=True)
@@ -196,9 +223,6 @@ class UploadService:
         except (UnsupportedFileError, FileTooLargeError, EmptyFileError):
             raise
         except Exception as exc:
-            # Domain AppErrors (corrupted, extraction, etc.) already carry status codes.
-            from app.core.exceptions import AppError
-
             if isinstance(exc, AppError):
                 logger.error(
                     "upload_failed",
@@ -208,6 +232,12 @@ class UploadService:
                 )
                 raise
             logger.exception("upload_failed", filename=filename, error=str(exc))
+            if _is_database_connectivity_error(exc):
+                raise DatabaseUnavailableError(
+                    "Cannot reach the database. Check DATABASE_URL host/DNS "
+                    "and that your Supabase project is active.",
+                    details={"filename": filename, "reason": str(exc)},
+                ) from exc
             raise ProcessingError(
                 "Document processing failed.",
                 details={"filename": filename, "reason": str(exc)},
