@@ -18,7 +18,7 @@ from app.services.upload import UploadService
 @pytest.fixture
 def settings() -> Settings:
     return Settings(
-        DATABASE_URL="postgresql+asyncpg://test:test@localhost:5432/test",
+        DATABASE_URL="postgresql://postgres.pxiqdqgaqvkwqvrwpsea:12345@aws-1-us-east-1.pooler.supabase.com:5432/postgres",
         OPENAI_API_KEY="sk-test",
         MAX_UPLOAD_SIZE_BYTES=1024,
         LOAD_EMBEDDING_MODEL_ON_STARTUP=False,
