@@ -126,10 +126,14 @@ class RagAnswerPipeline:
             chunks=chunks,
             history=history,
         )
+
+        str_message = messages.__dict__ if hasattr(messages, "__dict__") else str(messages)
         logger.info(
             "prompt_built",
             message_count=len(messages),
             context_chunk_count=len(chunks),
+            history_count=history and len(history) or 0,
+            messages=str_message
         )
         async for token in self._llm.stream_chat(messages):
             yield token

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import AsyncIterator
+from dataclasses import asdict
 from typing import Any
 
 from app.core.config import Settings
@@ -61,7 +62,7 @@ class SearchService:
         logger.info(
             "search_started",
             question=question,
-            filters=filters.__dict__ if filters else None,
+            filters=asdict(filters) if filters else None,
         )
 
         chunks = await self._pipeline.retrieve_chunks(question, filters=filters)
