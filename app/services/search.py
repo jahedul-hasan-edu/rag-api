@@ -57,8 +57,20 @@ class SearchService:
         """
         started = time.perf_counter()
         question = question.strip()
+
+        logger.info(
+            "search_started",
+            question=question,
+            filters=filters.__dict__ if filters else None,
+        )
+
         chunks = await self._pipeline.retrieve_chunks(question, filters=filters)
         citations = citations_from_chunks(chunks)
+
+        logger.info(
+            "retrieval_completed",
+            retrieved_chunk_count=len(chunks),
+        )
 
         for citation in citations:
             yield format_sse("citation", citation.to_dict())
@@ -70,6 +82,11 @@ class SearchService:
         ):
             answer_parts.append(token)
             yield format_sse("token", {"token": token})
+
+        logger.info(
+            "answer_stream_completed",
+            answer_length=sum(len(p) for p in answer_parts),
+        )
 
         elapsed = time.perf_counter() - started
         logger.info(

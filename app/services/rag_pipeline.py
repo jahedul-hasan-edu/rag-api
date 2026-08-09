@@ -126,5 +126,10 @@ class RagAnswerPipeline:
             chunks=chunks,
             history=history,
         )
+        logger.info(
+            "prompt_built",
+            message_count=len(messages),
+            context_chunk_count=len(chunks),
+        )
         async for token in self._llm.stream_chat(messages):
             yield token

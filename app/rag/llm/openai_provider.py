@@ -46,6 +46,11 @@ class OpenAILLMProvider(LLMProvider):
         messages: Sequence[dict[str, str]],
     ) -> AsyncIterator[str]:
         started = time.perf_counter()
+        logger.info(
+            "llm_stream_started",
+            model=self._model,
+            message_count=len(messages),
+        )
         stream = await self._client.chat.completions.create(
             model=self._model,
             messages=list(messages),  # type: ignore[arg-type]

@@ -108,6 +108,12 @@ class ChunkingService:
         current_tokens = 0
 
         for unit in units:
+            logger.debug(
+                "chunking_unit",
+                page_number=page_number,
+                unit_preview=unit,
+                unit_tokens=self.count_tokens(unit),
+            )
             unit_tokens = self.count_tokens(unit)
 
             # Oversized unit: hard-split by tokens
